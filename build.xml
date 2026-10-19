@@ -339,6 +339,7 @@
         <delete dir="${demo.dir}" failonerror="false"/>
         <copy todir="${demo.dir}">
             <fileset file="sample.html"/>
+            <fileset file="sample-key.html"/>
             <fileset dir="${basedir}" includes="css/**"/>
             <fileset dir="${basedir}" includes="fonts/**"/>
             <fileset dir="${basedir}" includes="js/**/*.js"/>
