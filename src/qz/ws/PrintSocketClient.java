@@ -16,6 +16,7 @@ import org.eclipse.jetty.websocket.server.JettyServerUpgradeRequest;
 import org.eclipse.jetty.websocket.server.JettyServerUpgradeResponse;
 import org.usb4java.LoaderException;
 import qz.auth.Certificate;
+import qz.auth.LocalTrust;
 import qz.auth.Request;
 import qz.common.AboutInfo;
 import qz.common.Constants;
@@ -48,9 +49,6 @@ public class PrintSocketClient {
 
     private static final Logger log = LogManager.getLogger(PrintSocketClient.class);
 
-    // Set -Dqz.trustall=false to restore the original trust prompts
-    private static final boolean TRUST_ALL = !"false".equalsIgnoreCase(System.getProperty("qz.trustall"));
-
     private final TrayManager trayManager = PrintSocketServer.getTrayManager();
 
     private static final Semaphore dialogAvailable = new Semaphore(1, true);
@@ -70,7 +68,7 @@ public class PrintSocketClient {
         trayManager.displayInfoMessage("Client connected");
 
         //new connections are unknown until they send a proper certificate
-        openConnections.put(((InetSocketAddress)session.getRemoteAddress()).getPort(), new SocketConnection(Certificate.UNKNOWN));
+        openConnections.put(((InetSocketAddress)session.getRemoteAddress()).getPort(), new SocketConnection(Certificate.UNKNOWN, findOrigin(session)));
     }
 
     @OnWebSocketClose
@@ -130,8 +128,19 @@ public class PrintSocketClient {
 
             //if sent a certificate use that instead for this connection
             if (json.has("certificate")) {
-                try {
-                    Certificate certificate = new Certificate(json.optString("certificate"));
+                String certString = json.optString("certificate");
+                if (certString.startsWith(LocalTrust.KEY_PREFIX)) {
+                    //access key presented in place of a certificate
+                    if (LocalTrust.verifyAccessKey(certString.substring(LocalTrust.KEY_PREFIX.length()))) {
+                        log.debug("Connection through {} authenticated with access key", connectionPort);
+                        connection.setKeyAuthenticated(true);
+                    } else {
+                        log.warn("Invalid access key presented by connection through {}", connectionPort);
+                    }
+                    connection.setCertificate(Certificate.UNKNOWN);
+                    request.markNewConnection(Certificate.UNKNOWN);
+                } else try {
+                    Certificate certificate = new Certificate(certString);
                     connection.setCertificate(certificate);
 
                     request.markNewConnection(certificate);
@@ -142,7 +151,7 @@ public class PrintSocketClient {
                     request.markNewConnection(Certificate.UNKNOWN);
                 }
 
-                if (allowedFromDialog(UID, request, "connect to " + Constants.ABOUT_TITLE,
+                if (allowedFromDialog(UID, request, connection, "connect to " + Constants.ABOUT_TITLE,
                                       findDialogPosition(session, json.optJSONObject("position")))) {
                     sendResult(session, UID, null);
                 } else {
@@ -265,7 +274,7 @@ public class PrintSocketClient {
         }
 
         if (call.isDialogShown()
-                && !allowedFromDialog(UID, request, prompt, findDialogPosition(session, json.optJSONObject("position")))) {
+                && !allowedFromDialog(UID, request, connection, prompt, findDialogPosition(session, json.optJSONObject("position")))) {
             sendError(session, UID, "Request blocked");
             return;
         }
@@ -693,17 +702,27 @@ public class PrintSocketClient {
         }
     }
 
-    private boolean allowedFromDialog(String UID, Request request, String prompt, Point position) {
-        //Trust all: skip the site trust / invalid signature prompt entirely
-        if (TRUST_ALL) {
-            return true;
+    private static String findOrigin(Session session) {
+        try {
+            return session.getUpgradeRequest().getHeader("Origin");
         }
+        catch(Exception e) {
+            log.debug("Unable to determine websocket origin", e);
+            return null;
+        }
+    }
 
+    private boolean allowedFromDialog(String UID, Request request, SocketConnection connection, String prompt, Point position) {
         //If cert can be resolved before the lock, do so and return
         if (request.hasBlockedCert()) {
             return false;
         }
-        if (request.hasSavedCert()) {
+        if (request.isVerified() || request.hasSavedCert()) {
+            return true;
+        }
+
+        //trusted website host or access key: no prompt
+        if (connection != null && (LocalTrust.isTrustedOrigin(connection.getOrigin()) || connection.isKeyAuthenticated())) {
             return true;
         }
 

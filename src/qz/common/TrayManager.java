@@ -16,6 +16,7 @@ import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.server.Server;
 import qz.App;
 import qz.auth.Certificate;
+import qz.auth.LocalTrust;
 import qz.auth.Request;
 import qz.installer.shortcut.ShortcutCreator;
 import qz.printer.PrintServiceMatcher;
@@ -31,6 +32,7 @@ import qz.ws.substitutions.Substitutions;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -294,6 +296,17 @@ public class TrayManager {
         zipLogs.addActionListener(e -> FileUtilities.zipLogs());
         diagnosticMenu.add(zipLogs);
 
+        JMenuItem trustedHostsItem = new JMenuItem("Trusted hosts...", iconCache.getIcon(SAVED_ICON));
+        trustedHostsItem.setToolTipText("Websites whose requests are allowed without prompting");
+        trustedHostsItem.addActionListener(trustedHostsListener);
+
+        JMenuItem copyKeyItem = new JMenuItem("Copy access key");
+        copyKeyItem.setToolTipText("Copies the access key a website can present to connect without prompting");
+        copyKeyItem.addActionListener(copyKeyListener);
+
+        JMenuItem regenKeyItem = new JMenuItem("Regenerate access key...");
+        regenKeyItem.addActionListener(regenKeyListener);
+
         JMenuItem desktopItem = new JMenuItem("Create Desktop shortcut", iconCache.getIcon(DESKTOP_ICON));
         desktopItem.setMnemonic(KeyEvent.VK_D);
         desktopItem.addActionListener(desktopListener());
@@ -309,6 +322,9 @@ public class TrayManager {
             advancedMenu.add(new JSeparator());
         }
         advancedMenu.add(sitesItem);
+        advancedMenu.add(trustedHostsItem);
+        advancedMenu.add(copyKeyItem);
+        advancedMenu.add(regenKeyItem);
         advancedMenu.add(desktopItem);
         advancedMenu.add(new JSeparator());
         advancedMenu.add(anonymousItem);
@@ -355,6 +371,29 @@ public class TrayManager {
         }
     }
 
+
+    private final ActionListener trustedHostsListener = e -> {
+        Object input = JOptionPane.showInputDialog(null, "Comma-separated hosts allowed without prompting (wildcards such as *.example.com supported):",
+                                                   "Trusted hosts", JOptionPane.PLAIN_MESSAGE, null, null, LocalTrust.getTrustedHostsString());
+        if (input != null) {
+            LocalTrust.setTrustedHosts(getUserPrefs(), input.toString());
+            displayInfoMessage("Trusted hosts updated");
+        }
+    };
+
+    private final ActionListener copyKeyListener = e -> {
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(LocalTrust.getAccessKey()), null);
+        displayInfoMessage("Access key copied to clipboard");
+    };
+
+    private final ActionListener regenKeyListener = e -> {
+        int confirm = JOptionPane.showConfirmDialog(null, "Generate a new access key?  Sites using the old key will need the new one for new connections.",
+                                                    "Regenerate access key", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirm == JOptionPane.OK_OPTION) {
+            LocalTrust.regenerateAccessKey(getUserPrefs());
+            displayInfoMessage("Access key regenerated");
+        }
+    };
 
     private final ActionListener notificationsListener = new ActionListener() {
         @Override

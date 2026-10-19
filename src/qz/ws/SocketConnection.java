@@ -18,6 +18,8 @@ public class SocketConnection {
 
 
     private Certificate certificate;
+    private final String origin;
+    private volatile boolean keyAuthenticated = false;
 
     private volatile DeviceListener deviceListener;
 
@@ -34,7 +36,24 @@ public class SocketConnection {
 
 
     public SocketConnection(Certificate cert) {
+        this(cert, null);
+    }
+
+    public SocketConnection(Certificate cert, String origin) {
         certificate = cert;
+        this.origin = origin;
+    }
+
+    public String getOrigin() {
+        return origin;
+    }
+
+    public boolean isKeyAuthenticated() {
+        return keyAuthenticated;
+    }
+
+    public void setKeyAuthenticated(boolean keyAuthenticated) {
+        this.keyAuthenticated = keyAuthenticated;
     }
 
     public Certificate getCertificate() {

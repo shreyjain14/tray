@@ -10,6 +10,7 @@ import org.apache.logging.log4j.core.appender.rolling.DefaultRolloverStrategy;
 import org.apache.logging.log4j.core.appender.rolling.SizeBasedTriggeringPolicy;
 import org.apache.logging.log4j.core.filter.ThresholdFilter;
 import org.apache.logging.log4j.core.layout.PatternLayout;
+import qz.auth.LocalTrust;
 import qz.build.provision.params.Os;
 import qz.build.provision.params.Phase;
 import qz.common.Constants;
@@ -70,6 +71,7 @@ public class App {
         // Init user preferences
         userPrefs = new PropertyHelper(FileUtilities.USER_DIR + File.separator + Constants.PREFS_FILE + ".properties");
         userPrefs.remove(ArgValue.SECURITY_FILE_STRICT.getMatch()); // per https://github.com/qzind/tray/issues/1337
+        LocalTrust.init(userPrefs); // trusted hosts + access key, seeds defaults if absent
 
         // Headless if turned on by user or unsupported by environment
         headless = parser.isHeadless() ||
