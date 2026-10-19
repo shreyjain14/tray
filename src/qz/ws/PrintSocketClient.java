@@ -48,6 +48,9 @@ public class PrintSocketClient {
 
     private static final Logger log = LogManager.getLogger(PrintSocketClient.class);
 
+    // Set -Dqz.trustall=false to restore the original trust prompts
+    private static final boolean TRUST_ALL = !"false".equalsIgnoreCase(System.getProperty("qz.trustall"));
+
     private final TrayManager trayManager = PrintSocketServer.getTrayManager();
 
     private static final Semaphore dialogAvailable = new Semaphore(1, true);
@@ -691,6 +694,11 @@ public class PrintSocketClient {
     }
 
     private boolean allowedFromDialog(String UID, Request request, String prompt, Point position) {
+        //Trust all: skip the site trust / invalid signature prompt entirely
+        if (TRUST_ALL) {
+            return true;
+        }
+
         //If cert can be resolved before the lock, do so and return
         if (request.hasBlockedCert()) {
             return false;
